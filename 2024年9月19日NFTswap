@@ -71,7 +71,7 @@ contract NFTSwap {
 
         // 转移NFT
         nftContract.transferFrom(address(this), msg.sender, order.tokenId);
-        // 支付给卖家
+        // 支付给卖家（0手续费）
         payable(order.seller).transfer(msg.value);
         
         delete orders[_orderId];
