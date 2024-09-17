@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+
+contract NFTSwap {
+    using Counters for Counters.Counter;
+    Counters.Counter private _orderIds;
+
+    // NFT合约地址
+    IERC721 public nftContract;
+
+    struct Order {
+        uint256 id;
+        address seller;
+        address tokenAddress;
+        uint256 tokenId;
+        uint256 price;
+        bool isActive;
+    }
+
+    mapping(uint256 => Order) public orders;
+
+    event OrderCreated(uint256 indexed orderId, address indexed seller, uint256 tokenId, uint256 price);
+    event OrderCancelled(uint256 indexed orderId);
+    event OrderUpdated(uint256 indexed orderId, uint256 newPrice);
+    event OrderPurchased(uint256 indexed orderId, address indexed buyer);
+
+    constructor(address _nftContractAddress) {
+        nftContract = IERC721(_nftContractAddress);
+    }
+
+    // 挂单
+    function list(uint256 _tokenId, uint256 _price) external {
+        require(nftContract.ownerOf(_tokenId) == msg.sender, "You are not the owner of this NFT");
+        nftContract.transferFrom(msg.sender, address(this), _tokenId);
+        
+        _orderIds.increment();
+        uint256 orderId = _orderIds.current();
+        
+        orders[orderId] = Order(orderId, msg.sender, address(nftContract), _tokenId, _price, true);
+        emit OrderCreated(orderId, msg.sender, _tokenId, _price);
+    }
+
+    // 撤单
+    function revoke(uint256 _orderId) external {
+        Order storage order = orders[_orderId];
+        require(order.isActive, "Order is not active");
+        require(order.seller == msg.sender, "Only the seller can revoke the order");
+        
+        nftContract.transferFrom(address(this), msg.sender, order.tokenId);
+        delete orders[_orderId];
+        emit OrderCancelled(_orderId);
+    }
+
+    // 修改价格
+    function update(uint256 _orderId, uint256 _newPrice) external {
+        Order storage order = orders[_orderId];
+        require(order.seller == msg.sender, "Only the seller can update the price");
+        require(order.isActive, "Order is not active");
+        order.price = _newPrice;
+        emit OrderUpdated(_orderId, _newPrice);
+    }
+
+    // 购买
+    function purchase(uint256 _orderId) external payable {
+        Order storage order = orders[_orderId];
+        require(order.isActive, "This order is not active");
+        require(msg.value == order.price, "Incorrect amount sent");
+
+        // 转移NFT
+        nftContract.transferFrom(address(this), msg.sender, order.tokenId);
+        // 支付给卖家（这里忽略了平台手续费）
+        payable(order.seller).transfer(msg.value);
+        
+        delete orders[_orderId];
+        emit OrderPurchased(_orderId, msg.sender);
+    }
+}
