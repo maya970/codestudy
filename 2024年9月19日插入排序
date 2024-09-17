@@ -1,0 +1,36 @@
+solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract InsertionSort {
+    uint[] public numbers;
+
+    // 向数组中添加数字
+    function addNumber(uint _num) public {
+        numbers.push(_num);
+    }
+
+    // 执行插入排序
+    function insertionSort() public {
+        uint n = numbers.length;
+        for (uint i = 1; i < n; i++) {
+            uint key = numbers[i];
+            uint j = i - 1;
+
+            // 将比key大的元素向后移动一个位置
+            while (j >= 0 && numbers[j] > key) {
+                numbers[j + 1] = numbers[j];
+                if (j == 0) {
+                    break;
+                }
+                j--;
+            }
+            numbers[j + 1] = key;
+        }
+    }
+
+    // 获取当前数组的状态
+    function getNumbers() public view returns (uint[] memory) {
+        return numbers;
+    }
+}
