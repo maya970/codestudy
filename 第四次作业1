@@ -1,0 +1,57 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Ballot {
+    struct Proposal {
+        bytes32 name; // 提案名称
+        uint voteCount; // 投票数
+    }
+
+    address public chairperson; // 主持人
+    Proposal[] public proposals; // 提案列表
+
+    mapping(address => uint) public votes; // 投票记录
+    uint public startTime; // 投票开始时间
+    uint public endTime; // 投票结束时间
+
+    modifier onlyDuringVoting() {
+        require(block.timestamp >= startTime && block.timestamp <= endTime, "Voting is not active");
+        _;
+    }
+
+    constructor(bytes32[] memory proposalNames, uint _duration) {
+        chairperson = msg.sender;
+        startTime = block.timestamp;
+        endTime = startTime + _duration; // 持续时间（秒）
+
+        for (uint i = 0; i < proposalNames.length; i++) {
+            proposals.push(Proposal({
+                name: proposalNames[i],
+                voteCount: 0
+            }));
+        }
+    }
+
+    function vote(uint proposal) external onlyDuringVoting {
+        require(votes[msg.sender] == 0, "You have already voted");
+        require(proposal < proposals.length, "Invalid proposal");
+
+        votes[msg.sender] = proposal + 1; // 记录投票
+        proposals[proposal].voteCount += 1; // 增加投票数
+    }
+
+    function winningProposal() external view returns (uint winningProposal_) {
+        uint winningVoteCount = 0;
+
+        for (uint p = 0; p < proposals.length; p++) {
+            if (proposals[p].voteCount > winningVoteCount) {
+                winningVoteCount = proposals[p].voteCount;
+                winningProposal_ = p;
+            }
+        }
+    }
+
+    function winnerName() external view returns (bytes32 winnerName_) {
+        winnerName_ = proposals[winningProposal()].name;
+    }
+}
