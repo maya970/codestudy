@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract AMM is Ownable {
+    IERC20 public token;
+    uint256 public totalLiquidity;
+    mapping(address => uint256) public liquidityOf;
+
+    event LiquidityAdded(address indexed provider, uint256 amountToken, uint256 amountETH, uint256 liquidity);
+    event LiquidityRemoved(address indexed provider, uint256 amountToken, uint256 amountETH, uint256 liquidity);
+    event Swapped(address indexed user, uint256 amountIn, uint256 amountOut);
+
+    constructor(address _token) {
+        token = IERC20(_token);
+    }
+
+    function addLiquidity(uint256 amountToken) external payable returns (uint256 liquidity) {
+        require(msg.value > 0 && amountToken > 0, "Must send ETH and token");
+
+        // Transfer token to the contract
+        token.transferFrom(msg.sender, address(this), amountToken);
+
+        // Calculate liquidity
+        if (totalLiquidity == 0) {
+            liquidity = msg.value; // First liquidity
+        } else {
+            liquidity = (msg.value * totalLiquidity) / address(this).balance; // Proportional liquidity
+        }
+
+        // Update state
+        liquidityOf[msg.sender] += liquidity;
+        totalLiquidity += liquidity;
+
+        emit LiquidityAdded(msg.sender, amountToken, msg.value, liquidity);
+    }
+
+    function removeLiquidity(uint256 liquidity) external {
+        require(liquidityOf[msg.sender] >= liquidity, "Insufficient liquidity");
+
+        uint256 ethAmount = (liquidity * address(this).balance) / totalLiquidity;
+        uint256 tokenAmount = (liquidity * token.balanceOf(address(this))) / totalLiquidity;
+
+        // Update state
+        liquidityOf[msg.sender] -= liquidity;
+        totalLiquidity -= liquidity;
+
+        // Transfer back
+        payable(msg.sender).transfer(ethAmount);
+        token.transfer(msg.sender, tokenAmount);
+
+        emit LiquidityRemoved(msg.sender, tokenAmount, ethAmount, liquidity);
+    }
+
+    function swap(uint256 amountIn, uint256 minAmountOut) external {
+        require(amountIn > 0, "Must send amount");
+
+        // Calculate output amount using constant product formula
+        uint256 tokenReserve = token.balanceOf(address(this));
+        uint256 ethReserve = address(this).balance;
+
+        // Output calculation
+        uint256 amountOut = (amountIn * tokenReserve) / (ethReserve + amountIn);
+        require(amountOut >= minAmountOut, "Insufficient output amount");
+
+        // Update reserves
+        token.transfer(msg.sender, amountOut);
+        emit Swapped(msg.sender, amountIn, amountOut);
+    }
+
+    // 允许合约接收 ETH
+    receive() external payable {}
+}
